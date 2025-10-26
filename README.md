@@ -1,4 +1,7 @@
 上古卷轴5天际 所有练金材料效果,以及可以组成的配方列表.可筛选,可收藏
+# 程序截图
+![](img/3.PNG)
+
 # 数据来源
 1. https://en.uesp.net/wiki/Skyrim:Ingredients
 2. https://steamcommunity.com/sharedfiles/filedetails/?id=1378262872
