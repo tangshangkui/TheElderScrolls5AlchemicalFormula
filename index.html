@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>上古卷轴5重制版所有的炼金配方表和药剂效果</title>
+
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="jsimgcss/vxe-table/style.css">
+    <!-- 引入vue -->
+    <script src="jsimgcss/vue2.js"></script>
+    <!-- 引入脚本 -->
+    <script src="jsimgcss/xe-utils.js"></script>
+    <script src="jsimgcss/vxe-table/vxe-table2.js"></script>
+
+    <!--所有的数据都在这里-->
+    <script src="data.js"></script>
+    <!-- 用到了 vue2 vxe-table2.x  -->
+</head>
+<body>
+
+<div id="app" style="margin: 10px;">
+    <h1 v-if="IsUpdate">正在更新配方数据,可能需要几分钟</h1>
+
+
+    <div v-if="!IsUpdate">
+
+        <div>
+            数据来源:<a @click="openurl('https://en.uesp.net/wiki/Skyrim:Ingredients')"
+                    href="javascript:void(0)">uesp上古卷轴5材料数据</a> |
+            <a @click="openurl('https://steamcommunity.com/sharedfiles/filedetails/?id=1378262872')"
+               href="javascript:void(0)">steam炼金效果说明</a> |
+            <a @click="openurl('https://wiki.biligame.com/skyrim/%E7%82%BC%E9%87%91%E6%95%88%E6%9E%9C')"
+               href="javascript:void(0)">biligame炼金效果数据</a> |
+            <a @click="openurl('https://wiki.biligame.com/skyrim/%E4%B8%8A%E5%8F%A4%E5%8D%B7%E8%BD%B45%E5%A4%A9%E9%99%85:%E8%AF%8D%E6%B1%87%E8%A1%A8/%E6%A4%8D%E7%89%A9%E5%92%8C%E7%82%BC%E9%87%91')"
+               href="javascript:void(0)">biligame词汇翻译</a>
+        </div>
+        勾选材料,点击表格下方"生成配方"按钮,就可以看到勾选的材料可以生成的所有配方,效果,价格<br/>
+        点击图片可以查看图片大图<br/>
+        花园不为空表示可以在花园中种植,但数字具体意义我不知道<br/>
+        收藏的材料和配方会自动保存在本地,下次启动的时候不会丢失<br/>
+        点击中文名,英文名表头的筛选按钮可以搜索<br/>
+        控制台 player.additem 代码 数量<br/>
+        代码里面的xx表示mod序号,不同电脑可能不一样<br/>
+        例如 FExxx 可以从 FE001 FE002 开始尝试,xx0059ba 中的xx 则 从 010059ba 020059ba 慢慢尝试<br/>
+        <!--
+                border//边框
+                stripe//斑马纹,隔行背景变色
+                resizable//可拖动列宽
+                //鼠标所在行高亮
+                highlight-current-row
+                highlight-hover-row
+                show-overflow //内容溢出显示省略号
+                 :scroll-y="{enabled: false}" 自动换行
+        -->
+        <vxe-toolbar>
+            <template v-slot:buttons>
+                <vxe-button @click="$refs.vxeTable1.clearFilter()">显示全部</vxe-button>
+                <vxe-button @click="show1">显示勾选的</vxe-button>
+                <vxe-button @click="show2">显示收藏</vxe-button>
+                <vxe-button @click="show3">显示可以种植在花园的</vxe-button>
+            </template>
+
+        </vxe-toolbar>
+        <vxe-table
+                ref="vxeTable1"
+                border
+                stripe
+                resizable
+                highlight-current-row
+                highlight-hover-row
+
+                height="500"
+                :scroll-y="{enabled: false}"
+                :data="tableData1">
+            <vxe-table-column title="序号" field="id" width="70"></vxe-table-column>
+            <vxe-table-column field="check" :filters="[{label: '选中', value: true}, {label: '未选中', value: false }]"
+                              width="90">
+                <template v-slot:header>
+                    <vxe-checkbox content="全选" @change="change1"></vxe-checkbox>
+                </template>
+                <template v-slot="{ row }">
+                    <vxe-checkbox v-model="row.check"></vxe-checkbox>
+                </template>
+            </vxe-table-column>
+
+            <vxe-table-column field="material" title="收藏"
+                              :filters="[{label: '收藏', value: true}, {label: '未收藏', value: false }]" width="90">
+                <template v-slot="{ row }">
+                    <vxe-switch @change="userMaterial(row.id)" v-model="row.material" size="medium" open-label="是"
+                                close-label="否"></vxe-switch>
+                </template>
+            </vxe-table-column>
+
+            <vxe-table-column field="img" title="图片" width="80">
+                <template v-slot="{ row }">
+                    <img class="pointer" :src="row.img" style="width: 60px;" @click="bigImg(row.img)"/>
+                </template>
+            </vxe-table-column>
+            <vxe-table-column field="name" title="英文名" width="150" :filters="[{ data: '' }]" :filter-method="strSearch">
+                <template v-slot:filter="{ $panel, column }">
+                    <!--筛选输入框,因为filters是一个数组,所以用v-for-->
+                    <!--@change="$panel.changeOption($event, !!option.data, option)用于切换筛选按钮状态-->
+                    <!--实际执行筛选的函数是 strSearch-->
+                    <template v-for="(option, index) in column.filters" :filter-method="nameSearch">
+                        <vxe-input placeholder="请输入关键字搜索"
+                                   :key="index" v-model="option.data"
+                                   @keyup.enter.native="$panel.confirmFilter()"
+                                   @change="$panel.changeOption($event, !!option.data, option);"></vxe-input>
+                    </template>
+                </template>
+            </vxe-table-column>
+
+
+            <vxe-table-column field="name_zh" title="中文名" width="150" :filters="[{ data: '' }]"
+                              :filter-method="strSearch">
+                <template v-slot:filter="{ $panel, column }">
+                    <!--筛选输入框,因为filters是一个数组,所以用v-for-->
+                    <!--@change="$panel.changeOption($event, !!option.data, option)用于切换筛选按钮状态-->
+                    <!--实际执行筛选的函数是 strSearch-->
+                    <template v-for="(option, index) in column.filters" :filter-method="nameSearch">
+                        <vxe-input placeholder="请输入关键字搜索"
+                                   :key="index" v-model="option.data"
+                                   @keyup.enter.native="$panel.confirmFilter()"
+                                   @change="$panel.changeOption($event, !!option.data, option);"></vxe-input>
+                    </template>
+                </template>
+            </vxe-table-column>
+            <vxe-table-column field="code" title="代码" width="100"></vxe-table-column>
+
+            <vxe-table-column field="html1" title="效果1" width="120"></vxe-table-column>
+            <vxe-table-column field="html2" title="效果2" width="120"></vxe-table-column>
+            <vxe-table-column field="html3" title="效果3" width="120"></vxe-table-column>
+            <vxe-table-column field="html4" title="效果4" width="120"></vxe-table-column>
+
+            <vxe-table-column field="price" title="价格" width="60"></vxe-table-column>
+            <vxe-table-column field="store" title="商店" width="100"></vxe-table-column>
+            <vxe-table-column field="garden" title="花园" width="100"
+                              :filters="[{label: '非空', value: '1'},{label: '空白', value: '2'}]"
+                              :filter-method="strSearchNotEmpty"></vxe-table-column>
+        </vxe-table>
+
+        <!--弹窗 显示大图 -->
+        <vxe-modal v-model="showImgBig" width="600" show-footer>
+            <template v-slot>
+                <img :src="showImgBigSrc" style="width: 500px"/>
+            </template>
+        </vxe-modal>
+
+        <!--==================================================-->
+        <div style="margin-top: 20px">
+            <vxe-button status="primary" content="勾选材料后点击这里计算配方" @click="calculateRecipe"></vxe-button>
+        </div>
+        <h3><vxe-switch  v-model="showTable2" size="medium" open-label="显示筛选" close-label="关闭筛选"></vxe-switch>一共{{recipeKeys.length}}个配方,下面是所有配方的效果列表,勾选效果可以筛选配方</h3>
+
+        <vxe-table
+                v-if="showTable2"
+                ref="vxeTable2"
+                border
+                stripe
+                resizable
+                highlight-current-row
+                highlight-hover-row
+
+                height="300"
+                :scroll-y="{enabled: false}"
+                :data="tableData2">
+            <vxe-table-column title="序号" field="id" width="70"></vxe-table-column>
+            <vxe-table-column field="check" width="90">
+                <template v-slot:header>
+                    <vxe-checkbox content="筛选" @change="change2"></vxe-checkbox>
+                </template>
+                <template v-slot="{ row }">
+                    <vxe-checkbox v-model="row.check"></vxe-checkbox>
+                </template>
+            </vxe-table-column>
+            <vxe-table-column field="name" title="效果名" width="200"></vxe-table-column>
+            <vxe-table-column field="price" title="价格" width="200" sortable></vxe-table-column>
+            <vxe-table-column field="zh1" title="中文效果" width="200"></vxe-table-column>
+            <vxe-table-column field="num" title="配方数" width="100"></vxe-table-column>
+            <vxe-table-column field="zh" title="效果解释" width="500"></vxe-table-column>
+
+        </vxe-table>
+
+        <h3 v-if="showTable2">下面是配方数据,点击收藏可以保存配方,配方数{{tableData3.length}}</h3>
+        <vxe-toolbar>
+            <template v-slot:buttons>
+                <vxe-button v-if="showTable2" status="primary" @click="updateTable3">根据筛选重新计算配方</vxe-button>
+                <vxe-button  @click="show4">显示全部</vxe-button>
+                <vxe-button @click="show5">显示收藏</vxe-button>
+            </template>
+
+        </vxe-toolbar>
+        价格比例,例如显示价格为100,而你售卖的价格是10,那么输入0.1 显示的价格就会接近你的售卖价格
+        <vxe-input v-model="config.valueBL" placeholder="输入价格比例" type="float" @change="writeConfig" ></vxe-input>
+        <vxe-table
+                ref="vxeTable3"
+                border
+                stripe
+                resizable
+                highlight-current-row
+                highlight-hover-row
+
+                height="600"
+                :scroll-y="{enabled: true}"
+                :tooltip-config="{showAll: true, contentMethod: showTooltipMethod}"
+                :data="tableData3">
+            <vxe-table-column title="序号" field="id" width="70"></vxe-table-column>
+            <vxe-table-column field="check" width="90" title="收藏">
+                <template v-slot="{ row }">
+                    <vxe-checkbox v-model="row.userRecipe" @change="change3(row)"></vxe-checkbox>
+                </template>
+            </vxe-table-column>
+            <vxe-table-column field="price" title="价格" width="50" sortable>
+
+                <template v-slot="{ row }">
+                   {{ Math.floor(row.price * config.valueBL) }}
+                </template>
+            </vxe-table-column>
+            <vxe-table-column field="effect" title="配方效果" width="300"></vxe-table-column>
+            <vxe-table-column field="effectL" title="效果数" width="50" sortable></vxe-table-column>
+
+            <vxe-table-column field="p1" title="配方1" width="300"></vxe-table-column>
+            <vxe-table-column field="p2" title="配方2" width="300"></vxe-table-column>
+            <vxe-table-column field="p3" title="配方3" width="300"></vxe-table-column>
+
+            <vxe-table-column field="maxV" title="价格倍率" width="50" sortable></vxe-table-column>
+            <vxe-table-column field="maxM" title="效果倍率" width="50" sortable></vxe-table-column>
+            <vxe-table-column field="maxD" title="等待时间倍率" width="50" sortable></vxe-table-column>
+
+        </vxe-table>
+
+
+    </div>
+
+</div>
+
+</body>
+<script type="text/javascript">
+    const G_fs = require("fs");
+
+    //所有配方
+    var G_recipe = {
+        // "0_1": {
+        //     "price": 0.3, //价格
+        //     "effect": [
+        //         {'name': '效果英文名', 'v': '价格倍率', 'm': '效果倍率', "d": '等待时间倍率'}
+        //     ],
+        // }
+    };
+    var G_this;
+    var app = new Vue({
+        el: '#app',
+        data: {
+            showTable2:true,
+            recipeLength: 0,//配方总数,只在更新的时候有效
+            IsUpdate: false,
+            showUserOnly1: false, //只显示用户收藏的配方
+            tableData1: [],//表格1数据
+            tableData2: [],//表格2数据
+            tableData3: [],//表格2数据
+            recipeKeys: [],//根据勾选计算出来的所有配方的key (就是 G_recipe 的key)
+            recipeTypes: {},//所有的效果 [key]:数量 (G_Effect 的 key)
+            config: {
+                "material": [], //收藏的材料
+                "recipe": [], //收藏的配方,[[配料1,配料2]]
+                "valueBL": 1, //价格比例
+            },
+            configRecipe: {},//[key]:[配料1,配料2] , key 为 (就是 G_recipe 的key)
+            showImgBig: false,//弹出窗口显示大图
+            showImgBigSrc: '',
+            data_index: {}, //G_data [name]:index 索引
+        },
+        created: function () {
+            G_this = this;
+            for (var i = 0; i < G_data.length; i++) {
+                var k = G_data[i].name;
+                G_data[i].check = false; //是否选中
+                G_data[i].material = false;//用户收藏
+                G_data[i].id = i;//用户收藏
+                G_data[i].html1 = this.getEffectHtml(G_data[i].e1, G_data[i].m1, G_data[i].v1, G_data[i].d1);
+                G_data[i].html2 = this.getEffectHtml(G_data[i].e2, G_data[i].m2, G_data[i].v2, G_data[i].d2);
+                G_data[i].html3 = this.getEffectHtml(G_data[i].e3, G_data[i].m3, G_data[i].v3, G_data[i].d3);
+                G_data[i].html4 = this.getEffectHtml(G_data[i].e4, G_data[i].m4, G_data[i].v4, G_data[i].d4);
+
+                this.data_index[k] = i;
+            }
+            var c = G_fs.readFileSync('config.json', "utf-8");
+            //读取用户 收藏的材料和配方
+            this.config = JSON.parse(c);
+            if (this.config.material.length > 0) {
+                this.showUserOnly = true;
+                for (var i = 0; i < this.config.material.length; i++) {
+                    var k = this.config.material[i];
+                    G_data[this.data_index[k]].material = true;
+                }
+            }
+            this.tableData1 = G_data;
+
+            if (G_fs.existsSync('recipeCache.json')) {
+                G_recipe = JSON.parse(G_fs.readFileSync('recipeCache.json', 'utf-8'));
+                this.updateConfigRecipe();
+            } else {
+                this.IsUpdate = true;
+                setTimeout('G_this.updateRecipe();', 1000);
+            }
+        },
+        methods: {
+            //表格3 显示提示
+            showTooltipMethod ({ type, column, row, items, _columnIndex }) {
+                const { property } = column //column的 field属性
+                if(property != 'p1' && property != 'p2' && property != 'p3'){
+                    //不显示提示
+                    return false
+                }
+                if(property == 'p3' && row.p3id < 0){
+                    return false
+                }
+                var id = 0 ;
+                if(property == 'p1'){
+                    id = row.p1id;
+                }
+                if(property == 'p2'){
+                    id = row.p2id;
+                }
+                if(property == 'p3'){
+                    id = row.p3id;
+                }
+                var str = "名称:" + G_data[id].name_zh +"\n";
+                str += "效果:"+G_data[id].html1+"\n";
+                str += G_data[id].html2+"\n";
+                str += G_data[id].html3+"\n";
+                str += G_data[id].html4+"\n";
+                str += "价格:"+G_data[id].price+"\n";
+                str += "商店:"+G_data[id].store+"\n";
+                str += "花园:"+G_data[id].garden+"\n";
+                return str;
+            },
+            //显示勾选
+            show1: function () {
+                const xTable = this.$refs.vxeTable1
+                xTable.clearFilter() //清理查询条件
+                const column = xTable.getColumnByField('check')
+                // 修改第1个选项为勾选状态
+                column.filters[0].checked = true
+                // 修改条件之后，需要手动调用 updateData 处理表格数据
+                xTable.updateData()
+            },
+            //显示收藏
+            show2: function () {
+                const xTable = this.$refs.vxeTable1
+                xTable.clearFilter() //清理查询条件
+                const column = xTable.getColumnByField('material')
+                // 修改第1个选项为勾选状态
+                column.filters[0].checked = true
+                // 修改条件之后，需要手动调用 updateData 处理表格数据
+                xTable.updateData()
+            },
+            //显示可以种植花园的
+            show3: function () {
+                const xTable = this.$refs.vxeTable1
+                xTable.clearFilter() //清理查询条件
+                const column = xTable.getColumnByField('garden')
+                // 修改第1个选项为勾选状态
+                column.filters[0].checked = true
+                // 修改条件之后，需要手动调用 updateData 处理表格数据
+                xTable.updateData()
+            },
+            //表格3 显示全部
+            show4: function () {
+                for (let i = 0; i < this.tableData2.length; i++) {
+                    this.tableData2[i].check = true;
+                }
+                this.updateTable3();
+            },
+            //显示勾选的配方
+            calculateRecipe: function () {
+                this.recipeKeys = [];//所有配方的key(就是 G_recipe 的key)
+                var ids = [];
+                for (var i = 0; i < this.tableData1.length; i++) {
+                    if (this.tableData1[i].check) {
+                        ids.push(this.tableData1[i].id);
+                    }
+                }
+                if (ids.length < 3) {
+                    this.$XModal.alert('请至少选择3种材料', '提示');
+                    return;
+                }
+                for (i = 0; i < (ids.length - 2); i++) {
+                    for (var j = i + 1; j < (ids.length - 1); j++) {
+                        var key = "" + ids[i] + '_' + ids[j]
+                        if (G_recipe.hasOwnProperty(key)) {
+                            this.recipeKeys.push(key);
+                        }
+                        for (var k = j + 1; k < ids.length; k++) {
+                            var key2 = "" + ids[i] + "_" + ids[j] + '_' + ids[k]
+                            if (G_recipe.hasOwnProperty(key2)) {
+                                this.recipeKeys.push(key2);
+                            }
+                        }
+                    }
+                }
+                if (this.recipeKeys.length == 0) {
+                    this.$XModal.alert('没有匹配的配方', '提示');
+                    return;
+                }
+                this.updateRecipeTypes();
+                this.updateTable2();
+                this.updateTable3();
+            },
+            updateRecipeTypes() {
+                //更新 recipeTypes
+                var recipeTypes = {};
+                for (var i = 0; i < this.recipeKeys.length; i++) {
+                    var key = this.recipeKeys[i];
+                    var effect = G_recipe[key].effect;
+                    for (var j = 0; j < effect.length; j++) {
+                        var name = effect[j].name
+                        if (recipeTypes.hasOwnProperty(name)) {
+                            recipeTypes[name]++;
+                        } else {
+                            recipeTypes[name] = 1;
+                        }
+                    }
+                }
+                this.recipeTypes = recipeTypes;
+            },
+            updateTable2: function () {
+                //勾选 英文名 中文名 配方数 解释
+                var tableData2 = [];
+                var id = 0;
+                for (let name in this.recipeTypes) {
+                    id++;
+                    tableData2.push({
+                        id: id,
+                        check: true,
+                        name: name,
+                        zh1: G_Effect[name].zh1,
+                        num: this.recipeTypes[name],
+                        zh: G_Effect[name].zh,
+                        price: G_Effect[name].price,
+                    });
+                }
+
+                this.tableData2 = tableData2;
+            },
+            updateConfigRecipe: function () {
+                var Recipe = this.config.recipe; //用户收藏的配方
+                if (Recipe.length < 1) {
+                    return;
+                }
+                for (var i = 0; i < Recipe.length; i++) {
+                    var Rec = Recipe[i];
+                    var bool = true;
+                    var arr = [];
+                    for (var j = 0; j < Rec.length; j++) {
+                        if (!this.data_index.hasOwnProperty(Rec[j])) {
+                            bool = false;
+                            break;
+                        }
+                        arr.push(this.data_index[Rec[j]])
+                    }
+                    if (bool) {
+                        arr.sort(function (a, b) {
+                            return a - b;
+                        })
+                        if (arr.length == 3) {
+                            var key = "" + arr[0] + "_" + arr[1] + "_" + arr[2];
+                        } else {
+                            var key = "" + arr[0] + "_" + arr[1];
+                        }
+                        var arr2 = [];
+                        for (var j = 0; j < arr.length; j++) {
+                            var name = G_data[arr[j]].name;
+                            arr2.push(name);
+                        }
+
+                        if (G_recipe.hasOwnProperty(key)) {
+                            this.configRecipe[key] = arr2;
+                        }
+                    }
+                }
+            },
+            updateTable3: function () {
+                var tableData3 = [];
+                var checkKey = {};
+                for (var i = 0; i < this.tableData2.length; i++) {
+                    if (this.tableData2[i].check) {
+                        checkKey[this.tableData2[i].name] = true;
+                    }
+                }
+                var id = 0;
+                for (var i = 0; i < this.recipeKeys.length; i++) {
+                    var key = this.recipeKeys[i];
+                    var effect = G_recipe[key].effect;
+                    var bool = false;
+                    for (var j = 0; j < effect.length; j++) {
+                        if (checkKey.hasOwnProperty(effect[j].name)) {
+                            bool = true;
+                            break;
+                        }
+                    }
+                    //{"1_3":{"price":261,"effect":[{"name":"Invisibility","v":1,"m":1,"d":1}],"effectL":1}
+                    if (bool) {
+                        id++;
+                        tableData3.push(
+                            this.getTable3DataOne(key, id)
+                        )
+                    }
+                }
+                this.tableData3 = tableData3;
+            },
+            //显示收藏
+            show5: function () {
+                // configRecipe: {},//[key]:[配料1,配料2] , key 为 (就是 G_recipe 的key)
+                var tableData = [];
+                var id = 0;
+                for (var key in this.configRecipe) {
+                    id++;
+                    tableData.push(
+                        this.getTable3DataOne(key, id)
+                    );
+                }
+                this.tableData3 = tableData;
+            },
+            getTable3DataOne:function (key,id){
+                var nameArr=[];
+                var ids = key.split("_");
+                for (var j = 0; j < ids.length; j++) {
+                    ids[j] = parseInt(ids[j]);
+                    nameArr.push(G_data[ids[j]].name)
+                }
+                var effectStr = "";
+                var maxM = 0;
+                var maxV = 0;
+                var maxD = 0;
+
+                var effect = G_recipe[key].effect;
+                for (var j = 0; j < effect.length; j++) {
+                    var effect1 = effect[j];
+                    var str = G_Effect[effect1.name].zh1;
+                    if (effect1.m != 1) {
+                        str += " " + effect1.m + "🔥";
+                    }
+                    if (effect1.v != 1) {
+                        str += " " + effect1.v + "💰";
+                    }
+                    if (effect1.d != 1) {
+                        str += " " + effect1.d + "⌛";
+                    }
+                    maxM = Math.max(maxM, effect1.m);
+                    maxV = Math.max(maxV, effect1.v);
+                    maxD = Math.max(maxD, effect1.d);
+
+                    effectStr = effectStr + str + ",";
+
+                }
+               return {
+                   id: id,
+                   key: key,
+                   userRecipe: this.configRecipe.hasOwnProperty(key) ? true : false,
+                   price: G_recipe[key].price,
+                   maxM: maxM,
+                   maxV: maxV,
+                   maxD: maxD,
+                   effectL: G_recipe[key].effectL, //配方效果数
+                   p1: G_data[ids[0]].name_zh + "[" + G_data[ids[0]].code + "]",//配方1
+                   p2: G_data[ids[1]].name_zh + "[" + G_data[ids[1]].code + "]",//配方2
+                   p3: ids.length > 2 ? G_data[ids[2]].name_zh + "[" + G_data[ids[2]].code + "]" : "",
+
+                   p1id:ids[0],
+                   p2id:ids[1],
+                   p3id:ids.length > 2 ? ids[2] : -1,
+
+                   nameArr: nameArr,
+                   effect: effectStr,
+               };
+            },
+            //收藏
+            userMaterial: function (id) {
+                var name = G_data[id].name;
+                var bool = G_data[id].material;
+                var index = this.config.material.indexOf(name);
+                if (bool) {
+                    if (index == -1) {
+                        this.config.material.push(name);
+                    }
+                } else {
+                    if (index != -1) {
+                        this.config.material.splice(index, 1);
+                    }
+                }
+                this.writeConfig();
+            },
+            writeConfig: function () {
+                var config = JSON.stringify(this.config);
+                G_fs.writeFileSync('config.json', config);
+            },
+            //默认浏览器打开url
+            openurl: function (url) {
+                nw.Shell.openExternal(url);
+            },
+            //第一个表格全选
+            change1: function (checked) {
+                var c = checked.value;
+                //获取筛选结果 this.$refs.vxeTable1.getTableData().visibleData
+                var data = this.$refs.vxeTable1.getTableData().visibleData;
+                for (var i = 0; i < data.length; i++) {
+                    var id = data[i].id;
+                    G_data[id].check = c;
+                }
+            },
+            //第二个表格全选
+            change2: function (checked) {
+                var c = checked.value;
+                for (var i = 0; i < this.tableData2.length; i++) {
+                    this.tableData2[i].check = c;
+                }
+            },
+            //收藏按钮被点击
+            change3:function (row){
+                var bool = row.userRecipe;
+                if (bool) {
+                    if(!this.configRecipe.hasOwnProperty(row.key)){
+                        this.configRecipe[row.key] = row.nameArr;
+                    }
+                }else{
+                    if(this.configRecipe.hasOwnProperty(row.key)){
+                        delete this.configRecipe[row.key];
+                    }
+                }
+                var recipe = [];
+                for(var key in this.configRecipe){
+                    recipe.push(this.configRecipe[key]);
+                }
+                this.config.recipe = recipe;
+                this.writeConfig();
+            },
+            //搜索筛选
+            strSearch: function (v) {
+                //被搜索的字符串
+                var str = v.cellValue.toLowerCase();
+                // v.row 当前行数据
+                // 筛选框中输入的关键字
+                var key = v.option.data.toLowerCase();
+                //查找字符串
+                if (str.indexOf(key) >= 0) {
+                    return true;
+                } else {
+                    return false;
+                }
+            },
+            strSearchNotEmpty: function (v) {
+                var str = v.cellValue;
+                var key = v.value;
+                if (key == '1') {
+                    if (str != '') {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            },
+            bigImg: function (src) {
+                this.showImgBigSrc = src;
+                this.showImgBig = true;
+            },
+            //🔥 ⌛ 💰 生成 效果html数据(参数是 G_data中的 e1,m1,v1,d1)
+            getEffectHtml(e, m, v, d) {
+                // "e": "Weakness to Frost", //效果1
+                // "m": 1, //效果倍率
+                // "v": 1, //价值倍率
+                // "d": 1, //等待时间倍率
+                var html = G_Effect[e].zh1;
+                if (m != 1) {
+                    html += " " + m + "🔥";
+                }
+                if (v != 1) {
+                    html += " " + v + "💰";
+                }
+                if (d != 1) {
+                    html += " " + d + "⌛";
+                }
+                return html;
+            },
+            //=======================重新计算所有配方====================
+            updateRecipe: function () {
+                G_recipe = {};
+                var length = G_data.length
+                for (var i = 0; i < (length - 2); i++) {
+                    for (var j = i + 1; j < (length - 1); j++) {
+                        for (var k = j + 1; k < length; k++) {
+                            this.get_recipe(i, j, k)
+                        }
+                    }
+                }
+                G_recipe['_length'] = this.recipeLength
+                G_fs.writeFileSync('recipeCache.json', JSON.stringify(G_recipe));
+                this.updateConfigRecipe();
+                this.IsUpdate = false;
+            },
+            //m1 m2 m3 是材料id
+            get_recipe: function (m1, m2, m3) {
+                var arr = [parseInt(m1), parseInt(m2), parseInt(m3)];
+                //从小到大排序
+                arr.sort(function (a, b) {
+                    return a - b;
+                })
+                var k = "" + arr[0] + "_" + arr[1] + "_" + arr[2];
+                if (G_recipe.hasOwnProperty(k)) {
+                    return;
+                }
+                //======两种药剂的效果 =========
+                var reArr = [
+                    {
+                        k: "" + arr[0] + "_" + arr[1],
+                        v: this.get_recipe2(arr[0], arr[1]).effect
+                    },
+                    {
+                        k: "" + arr[0] + "_" + arr[2],
+                        v: this.get_recipe2(arr[0], arr[2]).effect
+                    },
+                    {
+                        k: "" + arr[1] + "_" + arr[2],
+                        v: this.get_recipe2(arr[1], arr[2]).effect
+                    }
+                ];
+                var nn = 0;
+                if (reArr[0].v.length > 0) {
+                    nn++;
+                }
+                if (reArr[1].v.length > 0) {
+                    nn++;
+                }
+                if (reArr[2].v.length > 0) {
+                    nn++;
+                }
+                if (nn < 2) {
+                    //如果只有一种配置有效果,那么三种物品不可能比两种效果好
+                    return;
+                }
+
+                var effects = [];
+                for (var i = 0; i < reArr.length; i++) {
+                    //把所有效果合并到一个数组中
+                    effects.push(...reArr[i].v)
+                }
+                var e_kyes = {};
+                var effects1 = [];
+                //把所有效果合并到一个数组中
+                for (var i = 0; i < effects.length; i++) {
+                    if (!e_kyes.hasOwnProperty(effects[i].name)) {
+                        e_kyes[effects[i].name] = 1;
+                        effects1.push(effects[i])
+                    }
+                }
+                //计算 m v d 最大值
+                for (var i = 0; i < effects1.length; i++) {
+                    var m = 0;
+                    var v = 0;
+                    var d = 0;
+                    for (var j = 0; j < effects.length; j++) {
+                        if (effects1[i].name == effects[j].name) {
+                            m = Math.max(m, effects[j].m);
+                            v = Math.max(v, effects[j].v);
+                            d = Math.max(d, effects[j].d);
+                        }
+                    }
+                    effects1[i].m = m;
+                    effects1[i].v = v;
+                    effects1[i].d = d;
+                }
+                //判断效果是否和两种药物相同,如果加入第三种成分效果,价格,效果倍率,等待时间倍率都没有增加,那么三种成分的配方是无效的
+                if (!(this.is_beter(effects1, reArr[0].v) && this.is_beter(effects1, reArr[0].v) && this.is_beter(effects1, reArr[0].v))) {
+                    return;
+                }
+                //计算价格
+
+                var price = 0;
+                for (var i = 0; i < effects1.length; i++) {
+                    price = price + G_Effect[effects1[i].name].price * effects1[i].v;
+                }
+                var k = "" + arr[0] + "_" + arr[1] + "_" + arr[2];
+                var re = {
+                    "price": price, //价格
+                    "effect": effects1,
+                    "effectL": effects1.length,
+                }
+                this.recipeLength++;
+                G_recipe[k] = re;
+            },
+            //判断 e1 效果是否 比 e2好
+            is_beter: function (e1, e2) {
+                if (e1.length > e2.length) {
+                    return true;
+                }
+                var bool = false;
+                for (var i = 0; i < e1.length; i++) {
+                    for (var j = 0; j < e2.length; j++) {
+                        if (e1[i].name == e2[j].name) {
+                            if (e1[i].m > e2[j].m || e1[i].v > e2[j].v || e1[i].d > e2[j].d) {
+                                bool = true;
+                            }
+                        }
+                    }
+                }
+                return bool;
+            },
+            //获取两种材料的效果
+            get_recipe2: function (m1, m2) {
+                //所有效果中 不存在某种效果的价格增益 同时拥有 增加 和 减少
+                //所有效果中 不存在某种效果的价格增益不相同的情况(即针对同一种效果的价格增幅,a产品 和 b产品要么没有增幅 要么增幅相同)
+                //同样增加值 无论是2个还是3个都取最大值,例如 (0.3和0.7) 取0.7,(0.3 0.7 1)取1
+                var k = "" + m1 + "_" + m2;
+                if (G_recipe.hasOwnProperty(k)) {
+                    return this.deepCopy( G_recipe[k] );
+                }
+                var re = {
+                    "price": 0, //价格
+                    "effect": [
+                        // {'name': '效果英文名', 'v': '价格倍率', 'm': '效果倍率', "d": '等待时间倍率'}
+                    ],
+                }
+                for (var i = 1; i <= 4; i++) {
+                    var e1 = G_data[m1]["e" + i];
+                    for (var j = 1; j <= 4; j++) {
+                        var e2 = G_data[m2]["e" + j];
+                        if (e1 == e2) {
+                            re["effect"].push({
+                                'name': e1,
+                                'v': Math.max(G_data[m1]["v" + i], G_data[m2]["v" + j]),
+                                'm': Math.max(G_data[m1]["m" + i], G_data[m2]["m" + j]),
+                                "d": Math.max(G_data[m1]["d" + i], G_data[m2]["d" + j]),
+                            })
+                        }
+                    }
+                }
+                //===========计算价格===================
+                if (re.effect.length > 0) {
+                    var price = 0;
+                    for (var i = 0; i < re.effect.length; i++) {
+                        price = price + G_Effect[re.effect[i].name].price * re.effect[i].v;
+                    }
+                }
+                re.price = price;
+                if (re.effect.length > 0) {
+                    k = "" + m1 + "_" + m2;
+                    re.effectL = re.effect.length
+                    G_recipe[k] = re;
+                    this.recipeLength++;
+                }
+                return this.deepCopy(re);
+            },
+            deepCopy: function (obj) {
+               return  JSON.parse(JSON.stringify(obj))
+            },
+        }
+    })
+
+
+</script>
+<style scoped>
+    .pointer {
+        cursor: pointer;
+    }
+</style>
+</html>

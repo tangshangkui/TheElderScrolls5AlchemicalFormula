@@ -1,0 +1,27 @@
+{
+  "main": "index.html", //项目入口页面
+  "name": "上古卷轴5重制版所有的炼金配方表和药剂效果",  //项目名
+  "description": "上古卷轴5重制版所有的炼金配方表和药剂效果",  //描述
+  //"nodejs" : true,//是否启用 nodejs
+
+  "window": {  //这里定义启动浏览器的一些关键的东西
+    "title": "上古卷轴5重制版所有的炼金配方表和药剂效果", //设置默认标题 当html中没有标题的时候生效
+    "icon": "link.png",
+    "frame": true, //这个是窗口的边框 包括窗口边框 窗口顶部的 标题栏 关闭按钮等 无边框的程序，将不可拖动。
+    "width": 800,
+    "height": 500,
+    "position": "center",//窗口打开时的位置，可以设置为“null”、“center”或者“mouse”。
+    "min_width": 800,
+    "min_height": 500,
+    "resizable":true, //是否允许调整窗口大小
+    "fullscreen":false,//是否全屏
+    "show_in_taskbar":true,//是否在任务栏显示
+    "show":true,//bool值，如果设置为false，启动时窗口不可见。
+    "kiosk":false //bool值。是否使用kiosk模式。如果使用kiosk模式，应用程序将全屏显示，并且阻止用户离开应用。
+  },
+  "webkit": {
+    "plugin": false, //是否加载插件
+    "java":false,//是否加载Java applets，默认为false。
+    "page-cache":false //是否启用页面缓存，默认为false。
+  }
+}
